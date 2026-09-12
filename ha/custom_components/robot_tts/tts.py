@@ -30,11 +30,20 @@ from .const import (
     CONF_PIPER_PORT,
     CONF_ROBOT_ENABLED,
     CONF_ROBOT_FILTER,
+    CONF_RVC_ENABLED,
+    CONF_RVC_F0_METHOD,
+    CONF_RVC_INDEX_RATE,
+    CONF_RVC_PITCH,
+    CONF_RVC_URL,
     CONF_VOICE_EN,
     CONF_VOICE_RU,
     DEFAULT_PIPER_HOST,
     DEFAULT_PIPER_PORT,
     DEFAULT_ROBOT_FILTER,
+    DEFAULT_RVC_F0_METHOD,
+    DEFAULT_RVC_INDEX_RATE,
+    DEFAULT_RVC_PITCH,
+    DEFAULT_RVC_URL,
     DEFAULT_VOICE_EN,
     DEFAULT_VOICE_RU,
 )
@@ -96,9 +105,39 @@ class RobotTtsEntity(TextToSpeechEntity):
         _LOGGER.debug("robot_tts: lang=%s voice=%s text=%r", "ru" if is_ru else "en", voice, message)
 
         wav = await self._piper(message, voice)
+        if self._opt(CONF_RVC_ENABLED, False):
+            wav = await self._rvc(wav)
         if self._opt(CONF_ROBOT_ENABLED, True):
             wav = await self._robotize(wav, self._opt(CONF_ROBOT_FILTER, DEFAULT_ROBOT_FILTER))
         return ("wav", wav)
+
+    # ---- RVC timbre conversion (persistent rvc_server) ----------------------
+    async def _rvc(self, wav: bytes) -> bytes:
+        """Send the Piper audio through the RVC service; on any failure keep the
+        Piper audio so the assistant still answers."""
+        from aiohttp import ClientSession, ClientTimeout
+
+        url = self._opt(CONF_RVC_URL, DEFAULT_RVC_URL).rstrip("/") + "/convert"
+        params = {
+            "pitch": str(int(self._opt(CONF_RVC_PITCH, DEFAULT_RVC_PITCH))),
+            "index_rate": str(float(self._opt(CONF_RVC_INDEX_RATE, DEFAULT_RVC_INDEX_RATE))),
+            "f0_method": str(self._opt(CONF_RVC_F0_METHOD, DEFAULT_RVC_F0_METHOD)),
+        }
+        try:
+            async with ClientSession(timeout=ClientTimeout(total=60)) as session:
+                async with session.post(url, params=params, data=wav,
+                                        headers={"Content-Type": "audio/wav"}) as resp:
+                    if resp.status != 200:
+                        _LOGGER.error("robot_tts: rvc_server returned %s: %s", resp.status,
+                                      (await resp.text())[:200])
+                        return wav
+                    out = await resp.read()
+                    _LOGGER.debug("robot_tts: rvc conversion took %s s",
+                                  resp.headers.get("X-Convert-Seconds"))
+                    return out if len(out) > 1000 else wav
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.error("robot_tts: rvc_server unreachable (%s), using Piper audio", err)
+            return wav
 
     # ---- Piper over Wyoming --------------------------------------------------
     async def _piper(self, text: str, voice: str) -> bytes:

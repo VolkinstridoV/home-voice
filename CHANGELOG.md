@@ -6,8 +6,24 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-- RVC (Applio) voice conversion inside `robot_tts`, so the speaker talks with a
-  trained character voice instead of an ffmpeg filter.
+### Added
+- `server/applio/rvc_server.py`: persistent RVC conversion service (model
+  loaded once, WAV in → WAV out over HTTP on 127.0.0.1:10500). Measured on the
+  7840HS with the model warm: 8.5 s of audio in 2.3 s (fcpe), 2.6 s
+  (crepe-tiny), 3.3 s (rmvpe); all three fully intelligible to Whisper.
+- `robot_tts`: optional RVC stage between Piper and the ffmpeg filter
+  (options `rvc_enabled`, `rvc_url`, `rvc_pitch`, `rvc_index_rate`,
+  `rvc_f0_method`); falls back to the plain Piper audio if the service is down.
+- Watchdog now also kills the spawned training worker on stop (it survived
+  its parent twice).
+
+### Result
+- JobBot voice trained overnight on CPU: 199 epochs × 3.5 min, best
+  checkpoint by validation metric at epoch 160. Side by side with the game
+  line, the owner heard one difference: word stress in "JobBot" (that comes
+  from Piper, not from the model).
+
+### Planned
 - LLM brain (Anthropic integration) behind `guarded_agent`.
 - Conversation timeout that resets on wake word, not on transcript.
 

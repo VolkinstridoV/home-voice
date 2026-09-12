@@ -8,6 +8,16 @@ CONF_VOICE_EN = "voice_en"
 CONF_VOICE_RU = "voice_ru"
 CONF_ROBOT_FILTER = "robot_filter"
 CONF_ROBOT_ENABLED = "robot_enabled"
+CONF_RVC_ENABLED = "rvc_enabled"
+CONF_RVC_URL = "rvc_url"
+CONF_RVC_PITCH = "rvc_pitch"
+CONF_RVC_INDEX_RATE = "rvc_index_rate"
+CONF_RVC_F0_METHOD = "rvc_f0_method"
+
+DEFAULT_RVC_URL = "http://127.0.0.1:10500"
+DEFAULT_RVC_PITCH = 0
+DEFAULT_RVC_INDEX_RATE = 0.5
+DEFAULT_RVC_F0_METHOD = "rmvpe"
 
 DEFAULT_PIPER_HOST = "127.0.0.1"
 DEFAULT_PIPER_PORT = 10200
