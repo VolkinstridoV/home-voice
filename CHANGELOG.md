@@ -7,9 +7,27 @@ versions follow [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Planned
-- Full under-the-hood journal (stage timings, tool calls), test suite of ~50 phrases.
-- Household memory with a "remember" tool.
-- Continue-conversation / barge-in, health checks, extra wake words ("Nabu", "Hello Nabu").
+- Extra wake words ("Nabu", "Hello Nabu"): custom microWakeWord model + custom firmware.
+- Speaker separation; low-confidence STT handling; GPU.
+
+## [0.3.0] - 2026-09-12
+
+Memory, tests, observability, self-healing.
+
+### Added
+- `nabu_memory`: durable household facts as an LLM API with `remember` /
+  `forget` tools; facts are injected into the agent's system prompt
+  (`nabu_memory.json`). Verified across separate conversations in ru and en.
+- Test suite `tests/phrases.yaml` (21 spoken cases: facts, translation both
+  ways, live search, honesty, style, memory, guard) and `tools/run_tests.py`
+  grading language, content, length, markdown, latency. 21/21 after fixes.
+- `tools/nabu_runs_export.py` (server cron, 5 min): pipeline stage timings
+  appended to `nabu_runs.jsonl` before HA forgets them; `tools/nabu_daily_report.py`
+  prints per-day turns, outcomes, latency percentiles, searches, estimated cost.
+- `server/health/nabu_health.sh` (server cron, 1 min): checks HA, Whisper,
+  proxy, Piper, RVC service and the speaker; restarts a failed container once
+  per 10 min and raises an HA persistent notification.
+- Prompt: name first when asked who you are; masculine self-reference in Russian.
 
 ## [0.2.0] - 2026-09-12
 

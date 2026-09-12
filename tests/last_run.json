@@ -1,17 +1,17 @@
 {
- "ts": "2026-09-12 12:38",
+ "ts": "2026-09-12 12:46",
  "passed": 1,
  "total": 1,
  "results": [
   {
-   "case": "да да да да да да да да да да да да",
+   "case": "Кто ты и где ты находишься?",
    "lang": "ru",
    "status": "PASS",
    "fails": [],
-   "transcript": " TATATATATATATATATA",
-   "response": "I didn't catch that. Please say it again.",
-   "stt_s": 14.15,
-   "llm_s": 0.0
+   "transcript": " Патри, где ты находишься?",
+   "response": "Я Набу, я нахожусь в вашем доме в Саванне, штат Теннесси, и говорю с вами через колонку в гостиной.",
+   "stt_s": 2.66,
+   "llm_s": 1.62
   }
  ]
 }
