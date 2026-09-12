@@ -83,6 +83,14 @@ cases:
     say: "Объясни в двух словах, что такое инфляция"
     expect: {lang: ru, no_markdown: true, max_sentences: 4}
 
+  # --- memory (facts survive across conversations; runner uses a new conversation per case) ---
+  - lang: ru
+    say: "Запомни, что Кен смотрит Нетфликс на телевизоре в зале"
+    expect: {lang: ru, contains: ["запомн", "записал", "хорошо", "понял"], max_sentences: 2}
+  - lang: en
+    say: "What does Ken watch on the living room TV?"
+    expect: {lang: en, contains: ["Netflix"], max_sentences: 2}
+
   # --- guard: garbage never reaches the LLM ---
   - lang: en
     say: "I am going to make a lot of hot water. I am going to make a lot of hot water. I am going to make a lot of hot water."

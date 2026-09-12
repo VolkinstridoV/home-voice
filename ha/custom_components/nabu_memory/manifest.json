@@ -1,0 +1,12 @@
+{
+  "domain": "nabu_memory",
+  "name": "Nabu Memory",
+  "version": "0.1.0",
+  "config_flow": true,
+  "dependencies": ["conversation"],
+  "codeowners": [],
+  "documentation": "https://github.com/VolkinstridoV/home-voice",
+  "integration_type": "service",
+  "iot_class": "local_push",
+  "single_config_entry": true
+}
