@@ -50,5 +50,6 @@ to Whisper.
   orphan; it keeps eating CPU and writing checkpoints. Kill the
   `multiprocessing.spawn` worker too.
 
-An issue for the silent fallback is filed upstream (see the repository's
-README for the link).
+Upstream fix proposed: [IAHispano/Applio#1292](https://github.com/IAHispano/Applio/pull/1292)
+— `run_train_script()` now raises `FileNotFoundError` when `--pretrained` is
+requested and the pair is missing, instead of training from scratch in silence.
