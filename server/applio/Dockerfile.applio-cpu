@@ -1,0 +1,16 @@
+# Applio (RVC) for CPU-only training/inference on home-server (2026-09-11).
+# Upstream Dockerfile installs CUDA torch; this one uses the CPU wheels.
+FROM python:3.12-trixie
+WORKDIR /app
+RUN apt-get update && apt-get install -y -qq --no-install-recommends ffmpeg libportaudio2 \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
+COPY . .
+RUN pip install --no-cache-dir --upgrade pip uv \
+    && uv venv /app/.venv --python 3.12 \
+    && . /app/.venv/bin/activate \
+    && uv pip install python-ffmpeg \
+    && uv pip install -r requirements.txt --extra-index-url https://download.pytorch.org/whl/cpu --index-strategy unsafe-best-match
+ENV PATH="/app/.venv/bin:$PATH"
+ENV OMP_NUM_THREADS=14
+VOLUME ["/app/logs/"]
+ENTRYPOINT ["sleep", "infinity"]

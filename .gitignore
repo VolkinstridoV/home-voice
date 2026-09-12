@@ -1,0 +1,18 @@
+# audio: source clips, datasets, probes, samples (large / copyrighted)
+jobbot/
+samples/
+*.wav
+*.mp3
+*.onnx
+*.pth
+*.index
+
+# python
+__pycache__/
+*.pyc
+.venv/
+improv-venv/
+
+# local config with secrets
+config.local.*
+.env

@@ -1,0 +1,12 @@
+{
+  "domain": "robot_tts",
+  "name": "Robot TTS",
+  "version": "0.1.0",
+  "config_flow": true,
+  "dependencies": ["tts"],
+  "after_dependencies": ["wyoming"],
+  "codeowners": [],
+  "documentation": "https://github.com/VolkinstridoV",
+  "integration_type": "service",
+  "iot_class": "local_push"
+}

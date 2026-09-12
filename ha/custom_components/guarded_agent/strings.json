@@ -1,0 +1,27 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Guarded Agent",
+        "description": "Wraps another conversation agent. If that agent is missing, times out or fails, the fixed phrase is spoken instead.",
+        "data": {
+          "primary_agent": "Primary agent entity (e.g. conversation.claude), empty = always fallback",
+          "fallback_phrase": "Fallback phrase",
+          "timeout": "Timeout for the primary agent (seconds)"
+        }
+      }
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Guarded Agent",
+        "data": {
+          "primary_agent": "Primary agent entity (e.g. conversation.claude), empty = always fallback",
+          "fallback_phrase": "Fallback phrase",
+          "timeout": "Timeout for the primary agent (seconds)"
+        }
+      }
+    }
+  }
+}

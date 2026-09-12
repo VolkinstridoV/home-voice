@@ -1,0 +1,16 @@
+# Home Assistant Container, set up 2026-09-11.
+# Official reference: https://www.home-assistant.io/installation/linux#docker-compose
+services:
+  homeassistant:
+    container_name: homeassistant
+    image: "ghcr.io/home-assistant/home-assistant:stable"
+    volumes:
+      - /opt/homeassistant/config:/config
+      - /etc/localtime:/etc/localtime:ro
+      - /run/dbus:/run/dbus:ro
+    restart: unless-stopped
+    stop_grace_period: 60s
+    privileged: true
+    network_mode: host
+    environment:
+      TZ: America/Chicago
