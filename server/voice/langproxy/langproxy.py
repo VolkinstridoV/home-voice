@@ -60,18 +60,30 @@ class LangProxy:
             idx = (np.arange(int(len(audio) * 16000 / rate)) * rate / 16000).astype(np.int64)
             audio = audio[np.clip(idx, 0, len(audio) - 1)]
         if len(audio) < 16000 // 2:
-            return self.default_lang, 0.0
-        lang, prob, _all = self.model.detect_language(audio)
-        return lang, float(prob)
+            return self.default_lang, 0.0, None
+        lang, prob, all_probs = self.model.detect_language(audio)
+        # Pick the most probable *allowed* language, not the global winner:
+        # short Russian utterances are sometimes tagged "pl"/"uk" by the tiny
+        # model, which would otherwise fall back to the default (English).
+        best = None
+        for item in all_probs or []:
+            code, p = (item[0], item[1]) if isinstance(item, (tuple, list)) else (getattr(item, "language", None), getattr(item, "language_probability", 0.0))
+            if code in self.allowed and (best is None or p > best[1]):
+                best = (code, float(p))
+        return lang, float(prob), best
 
     async def detect(self, pcm: bytes, rate: int, width: int, channels: int) -> str:
         t0 = time.monotonic()
         async with self.lock:
-            lang, prob = await asyncio.get_running_loop().run_in_executor(
+            lang, prob, best = await asyncio.get_running_loop().run_in_executor(
                 None, self._detect_sync, pcm, rate, width, channels)
-        chosen = lang if lang in self.allowed else self.default_lang
-        _LOGGER.info("language id: %s (p=%.2f) -> %s in %.2fs, %.1fs audio",
-                     lang, prob, chosen, time.monotonic() - t0, len(pcm) / (rate * width * channels))
+        if best is not None:
+            chosen = best[0]
+        else:
+            chosen = lang if lang in self.allowed else self.default_lang
+        _LOGGER.info("language id: %s (p=%.2f) -> %s%s in %.2fs, %.1fs audio",
+                     lang, prob, chosen, f" (best allowed p={best[1]:.2f})" if best else "",
+                     time.monotonic() - t0, len(pcm) / (rate * width * channels))
         return chosen
 
     # ---- one client connection ---------------------------------------------
