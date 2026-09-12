@@ -58,6 +58,11 @@ def stop_training(reason: str) -> None:
     log(f"STOP training: {reason}")
     subprocess.run(["pkill", "-f", "core.py train"])
     subprocess.run(["pkill", "-f", "rvc/train/train.py"])
+    # train.py spawns the real training loop via multiprocessing.spawn; it
+    # survives its parent (observed twice) and keeps training and saving.
+    time.sleep(3)
+    subprocess.run(["pkill", "-f", "multiprocessing.spawn"])
+    subprocess.run(["pkill", "-f", "multiprocessing.resource_tracker"])
     jsonl({"event": "stop", "reason": reason})
 
 
