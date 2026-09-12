@@ -97,6 +97,9 @@ class GuardedAgentEntity(ConversationEntity):
 
     _attr_has_entity_name = True
     _attr_name = None
+    # The wrapped LLM agent streams its deltas into the same chat log (same
+    # conversation id), so the pipeline can start TTS before the answer ends.
+    _attr_supports_streaming = True
 
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
         self._entry = entry

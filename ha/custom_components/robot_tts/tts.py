@@ -17,6 +17,8 @@ from wyoming.tts import Synthesize, SynthesizeVoice
 from homeassistant.components.tts import (
     ATTR_VOICE,
     TextToSpeechEntity,
+    TTSAudioRequest,
+    TTSAudioResponse,
     TtsAudioType,
     Voice,
 )
@@ -50,6 +52,43 @@ from .const import (
 
 _LOGGER = logging.getLogger(__name__)
 _CYRILLIC = re.compile(r"[Ѐ-ӿ]")
+# end of a sentence followed by whitespace, or a paragraph break
+_SENTENCE_END = re.compile(r"(?<=[.!?…])\s+|\n+")
+_MAX_SENTENCE = 220  # characters; longer runs are split at ", " so audio starts sooner
+_FIRST_CHUNK = 70    # the opening chunk is kept short so the first sound comes within ~1.5 s
+
+
+def _wav_header(rate: int, width: int, channels: int) -> bytes:
+    """44-byte WAV header with unknown length (streaming), as wyoming does."""
+    import struct
+
+    byte_rate = rate * channels * width
+    block_align = channels * width
+    return (
+        b"RIFF" + struct.pack("<I", 0xFFFFFFFF) + b"WAVE"
+        + b"fmt " + struct.pack("<IHHIIHH", 16, 1, channels, rate, byte_rate, block_align, width * 8)
+        + b"data" + struct.pack("<I", 0xFFFFFFFF)
+    )
+
+
+def _split_sentences(text: str) -> tuple[list[str], str]:
+    """Return (complete sentences, remainder) from buffered text."""
+    parts: list[str] = []
+    pos = 0
+    for m in _SENTENCE_END.finditer(text):
+        sentence = text[pos:m.start()].strip()
+        if sentence:
+            parts.append(sentence)
+        pos = m.end()
+    rest = text[pos:]
+    # a very long sentence still in the buffer: cut at a comma so the speaker starts
+    while len(rest) > _MAX_SENTENCE:
+        cut = rest.rfind(", ", 0, _MAX_SENTENCE)
+        if cut <= 0:
+            break
+        parts.append(rest[: cut + 1].strip())
+        rest = rest[cut + 2:]
+    return parts, rest
 
 
 async def async_setup_entry(
@@ -96,20 +135,86 @@ class RobotTtsEntity(TextToSpeechEntity):
             return [Voice(self._voice_ru, self._voice_ru)]
         return [Voice(self._voice_en, self._voice_en)]
 
-    async def async_get_tts_audio(
-        self, message: str, language: str, options: dict[str, Any]
-    ) -> TtsAudioType:
+    async def _synthesize_wav(self, message: str, options: dict[str, Any]) -> bytes:
+        """Piper -> (RVC) -> (ffmpeg) for one piece of text; returns a WAV."""
         # Language comes from the TEXT, not from the pipeline: that is the point.
         is_ru = bool(_CYRILLIC.search(message))
         voice = options.get(ATTR_VOICE) or (self._voice_ru if is_ru else self._voice_en)
         _LOGGER.debug("robot_tts: lang=%s voice=%s text=%r", "ru" if is_ru else "en", voice, message)
-
         wav = await self._piper(message, voice)
         if self._opt(CONF_RVC_ENABLED, False):
             wav = await self._rvc(wav)
         if self._opt(CONF_ROBOT_ENABLED, True):
             wav = await self._robotize(wav, self._opt(CONF_ROBOT_FILTER, DEFAULT_ROBOT_FILTER))
-        return ("wav", wav)
+        return wav
+
+    async def async_get_tts_audio(
+        self, message: str, language: str, options: dict[str, Any]
+    ) -> TtsAudioType:
+        return ("wav", await self._synthesize_wav(message, options))
+
+    # ---- streaming: speak sentence by sentence while the LLM is still writing ----
+    def async_supports_streaming_input(self) -> bool:
+        return True
+
+    async def async_stream_tts_audio(self, request: TTSAudioRequest) -> TTSAudioResponse:
+        return TTSAudioResponse("wav", self._stream_pcm(request))
+
+    async def _stream_pcm(self, request: TTSAudioRequest):
+        import time
+
+        t0 = time.monotonic()
+        buf = ""
+        header_sent = False
+        fmt: tuple[int, int, int] | None = None
+        n_sent = 0
+
+        async def speak(sentence: str):
+            nonlocal header_sent, fmt, n_sent
+            wav = await self._synthesize_wav(sentence, request.options)
+            with wave.open(io.BytesIO(wav)) as w:
+                rate, width, channels = w.getframerate(), w.getsampwidth(), w.getnchannels()
+                pcm = w.readframes(w.getnframes())
+            if fmt is not None and (rate, width, channels) != fmt:
+                pcm = await self._resample(pcm, (rate, width, channels), fmt)
+            if not header_sent:
+                fmt = (rate, width, channels)
+                header_sent = True
+                _LOGGER.debug("robot_tts: first audio after %.2fs (%d chars)", time.monotonic() - t0, len(sentence))
+                yield _wav_header(*fmt)
+            n_sent += 1
+            yield pcm
+
+        async for chunk in request.message_gen:
+            buf += chunk
+            sentences, buf = _split_sentences(buf)
+            if not header_sent and sentences and len(sentences[0]) > _FIRST_CHUNK:
+                # the very first sound should come fast: cut the opening sentence at
+                # a clause boundary so RVC works on ~3 s of audio, not ~8 s
+                first = sentences[0]
+                cut = max(first.rfind(", ", 25, _FIRST_CHUNK), first.rfind(" — ", 25, _FIRST_CHUNK))
+                if cut <= 0:  # no clause boundary: a word boundary is still better than 3 s of silence
+                    cut = first.rfind(" ", 35, _FIRST_CHUNK)
+                if cut > 0:
+                    sentences[0:1] = [first[: cut + 1].strip(), first[cut + 1:].strip()]
+            for s in sentences:
+                async for data in speak(s):
+                    yield data
+        if buf.strip():
+            async for data in speak(buf.strip()):
+                yield data
+        _LOGGER.debug("robot_tts: stream done, %d sentences in %.2fs", n_sent, time.monotonic() - t0)
+
+    @staticmethod
+    async def _resample(pcm: bytes, src: tuple[int, int, int], dst: tuple[int, int, int]) -> bytes:
+        """Rare path: a sentence came back in a different format than the header."""
+        proc = await asyncio.create_subprocess_exec(
+            "ffmpeg", "-loglevel", "error", "-f", "s16le", "-ar", str(src[0]), "-ac", str(src[2]),
+            "-i", "pipe:0", "-f", "s16le", "-ar", str(dst[0]), "-ac", str(dst[2]), "pipe:1",
+            stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+        )
+        out, _ = await proc.communicate(pcm)
+        return out
 
     # ---- RVC timbre conversion (persistent rvc_server) ----------------------
     async def _rvc(self, wav: bytes) -> bytes:

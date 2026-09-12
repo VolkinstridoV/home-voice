@@ -6,7 +6,43 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Planned
+- Full under-the-hood journal (stage timings, tool calls), test suite of ~50 phrases.
+- Household memory with a "remember" tool.
+- Continue-conversation / barge-in, health checks, extra wake words ("Nabu", "Hello Nabu").
+
+## [0.2.0] - 2026-09-12
+
+The brain, the guard rails, and streaming speech.
+
 ### Added
+- **Claude as the brain**: Anthropic integration (Sonnet 5, web search + web
+  fetch, user location, prompt caching, thinking off) behind `guarded_agent`;
+  system prompt `ha/prompts/nabu.txt` (Savannah/Hardin County, household,
+  per-question length policy, tool disclosure, honest refusals).
+- **Spend safety in `guarded_agent`**: input gate (empty / repeated /
+  duplicate transcripts never reach the LLM), sliding-window limits
+  (6/min, 60/h, 400/day, configurable), circuit breaker (3 failures → 5 min
+  pause), one call at a time, 30 s timeout. Every refusal is *spoken* in the
+  user's language. Offline tests: `tests/test_spend.py`.
+- **Persistent conversation journal** `nabu_conversations.jsonl` (HA keeps only
+  the last 10 pipeline runs in memory): user text, agent, answer, LLM seconds,
+  tool calls (web_search queries), guard counters.
+- **Streaming speech** in `robot_tts`: sentences are synthesized and RVC-converted
+  one by one while Claude is still writing; the opening chunk is kept short.
+  Measured: first sound 1.8 s after the reply starts (was: whole answer +
+  whole conversion, 5–8 s, and long answers were never played at all).
+- `langproxy`: pick the most probable *allowed* language from the full
+  probability table (short Russian was tagged "pl" and fell back to English).
+- Persistent debug log levels in HA `configuration.yaml`.
+
+### Fixed
+- Long answers silently not played on the speaker (fixed by streaming).
+- Applio container recreation lost the embedder/predictor files (HF returned
+  429 on parallel downloads → 0-byte files → `EOFError`); copies now live in
+  `/opt/applio-data/models`.
+
+### Added earlier today
 - `server/applio/rvc_server.py`: persistent RVC conversion service (model
   loaded once, WAV in → WAV out over HTTP on 127.0.0.1:10500). Measured on the
   7840HS with the model warm: 8.5 s of audio in 2.3 s (fcpe), 2.6 s
