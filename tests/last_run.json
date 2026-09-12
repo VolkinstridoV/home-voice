@@ -1,0 +1,17 @@
+{
+ "ts": "2026-09-12 12:38",
+ "passed": 1,
+ "total": 1,
+ "results": [
+  {
+   "case": "да да да да да да да да да да да да",
+   "lang": "ru",
+   "status": "PASS",
+   "fails": [],
+   "transcript": " TATATATATATATATATA",
+   "response": "I didn't catch that. Please say it again.",
+   "stt_s": 14.15,
+   "llm_s": 0.0
+  }
+ ]
+}

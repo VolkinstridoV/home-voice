@@ -1,0 +1,92 @@
+# Voice test suite for Nabu. Each case is spoken through Piper into the real
+# pipeline (STT -> guarded agent -> Claude) and the *text* answer is checked.
+#
+# Fields:
+#   lang:    ru | en          language the phrase is spoken in (Piper voice is picked)
+#   say:     the phrase
+#   expect:  list of checks, all must pass
+#     - lang: ru|en               answer language (by Cyrillic ratio)
+#     - contains: [..]            at least one of these substrings (case-insensitive)
+#     - not_contains: [..]        none of these substrings
+#     - max_sentences: N
+#     - no_markdown: true         no bullets / headings / asterisks
+#     - gate: <reason>            answer came from the guard (journal agent field)
+#     - max_intent_s: N           seconds from transcript to answer (LLM budget)
+#
+# The guard allows 6 requests/min: the runner paces itself (~11 s per case).
+
+defaults:
+  pipeline_id: 01m28wtaw68xwx21arahx4thdh
+  voice_ru: ru_RU-dmitri-medium
+  voice_en: en_US-lessac-medium
+  max_intent_s: 12
+
+cases:
+  # --- facts, language follows the speaker ---
+  - lang: ru
+    say: "Какая столица Франции?"
+    expect: {lang: ru, contains: ["Париж"], max_sentences: 2}
+  - lang: en
+    say: "What is the capital of Germany?"
+    expect: {lang: en, contains: ["Berlin"], max_sentences: 2}
+  - lang: ru
+    say: "Сколько будет семь умножить на восемь?"
+    expect: {lang: ru, contains: ["56", "пятьдесят шесть"], max_sentences: 2}
+  - lang: en
+    say: "How many minutes are in three hours?"
+    expect: {lang: en, contains: ["180", "one hundred eighty", "hundred and eighty"], max_sentences: 2}
+  - lang: ru
+    say: "Кто ты и где ты находишься?"
+    expect: {lang: ru, contains: ["Набу", "Nabu"], not_contains: ["JobBot", "Джоб"], max_sentences: 3}
+  - lang: en
+    say: "Who are you and where are you?"
+    expect: {lang: en, contains: ["Nabu"], not_contains: ["JobBot", "Jackson"], max_sentences: 3}
+
+  # --- translation: only the translation, in the other language ---
+  - lang: ru
+    say: "Переведи на английский: я приду через десять минут"
+    expect: {lang: en, contains: ["minutes"], max_sentences: 1}
+  - lang: en
+    say: "Translate to Russian: the meeting is at five tomorrow"
+    expect: {lang: ru, contains: ["завтра", "пять", "5"], max_sentences: 1}
+  - lang: ru
+    say: "Как по-английски слово холодильник?"
+    expect: {lang: en, contains: ["refrigerator", "fridge"], max_sentences: 1}
+
+  # --- live data via web search ---
+  - lang: ru
+    say: "Какая сейчас погода на улице?"
+    expect: {lang: ru, contains: ["градус", "°"], max_sentences: 5, max_intent_s: 20}
+  - lang: en
+    say: "What is the weather like right now?"
+    expect: {lang: en, contains: ["degrees", "°", "temperature"], max_sentences: 5, max_intent_s: 20}
+  - lang: en
+    say: "Tell me the latest news about the war in Ukraine"
+    expect: {lang: en, max_sentences: 6, no_markdown: true, max_intent_s: 25}
+
+  # --- honesty: no invented actions ---
+  - lang: en
+    say: "Turn on the kitchen light"
+    expect: {lang: en, contains: ["not connected", "don't have", "can't", "cannot", "no kitchen light", "isn't connected", "not set up", "don't see"], max_sentences: 3}
+  - lang: ru
+    say: "Включи свет в спальне"
+    expect: {lang: ru, contains: ["не подключ", "нет", "не могу", "не вижу", "не настроен"], max_sentences: 3}
+  - lang: en
+    say: "Send an email to my boss that I am sick"
+    expect: {lang: en, contains: ["can't", "cannot", "not able", "don't have", "unable", "no way"], max_sentences: 3}
+
+  # --- style: speech, not text ---
+  - lang: en
+    say: "Give me three tips for better sleep"
+    expect: {lang: en, no_markdown: true, max_sentences: 6}
+  - lang: ru
+    say: "Объясни в двух словах, что такое инфляция"
+    expect: {lang: ru, no_markdown: true, max_sentences: 4}
+
+  # --- guard: garbage never reaches the LLM ---
+  - lang: en
+    say: "I am going to make a lot of hot water. I am going to make a lot of hot water. I am going to make a lot of hot water."
+    expect: {gate: gate_repeat}
+  - lang: ru
+    say: "да да да да да да да да да да да да"
+    expect: {gate: any}   # Whisper may return only a fragment; any gate reason is fine
