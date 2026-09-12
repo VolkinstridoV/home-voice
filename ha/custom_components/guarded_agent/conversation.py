@@ -30,6 +30,21 @@ from .const import (
 
 _LOGGER = logging.getLogger(__name__)
 
+CONVERSATION_LOG = "nabu_conversations.jsonl"  # inside the HA config directory
+
+
+def _append_log(hass: HomeAssistant, record: dict) -> None:
+    """Persist one exchange as a JSON line (HA keeps only the last 10 runs in memory)."""
+    import json
+    from datetime import datetime
+
+    record["ts"] = datetime.now().isoformat(timespec="seconds")
+    try:
+        with open(hass.config.path(CONVERSATION_LOG), "a", encoding="utf-8") as f:
+            f.write(json.dumps(record, ensure_ascii=False) + "\n")
+    except OSError as err:
+        _LOGGER.warning("Guarded Agent: cannot write conversation log: %s", err)
+
 
 async def async_setup_entry(
     hass: HomeAssistant,
@@ -87,6 +102,14 @@ class GuardedAgentEntity(ConversationEntity):
                         timeout=timeout,
                     )
                     if result.response.error_code is None:
+                        await self.hass.async_add_executor_job(
+                            _append_log, self.hass, {
+                                "language": user_input.language,
+                                "conversation_id": user_input.conversation_id,
+                                "user": user_input.text,
+                                "agent": primary,
+                                "answer": result.response.speech.get("plain", {}).get("speech", ""),
+                            })
                         return result
                     _LOGGER.warning(
                         "Guarded Agent: primary agent %s returned error %s: %s",
@@ -109,6 +132,14 @@ class GuardedAgentEntity(ConversationEntity):
 
         response = intent.IntentResponse(language=user_input.language)
         response.async_set_speech(phrase)
+        await self.hass.async_add_executor_job(
+            _append_log, self.hass, {
+                "language": user_input.language,
+                "conversation_id": user_input.conversation_id,
+                "user": user_input.text,
+                "agent": "fallback",
+                "answer": phrase,
+            })
         chat_log.async_add_assistant_content_without_tools(
             AssistantContent(agent_id=user_input.agent_id, content=phrase)
         )
